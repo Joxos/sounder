@@ -1,0 +1,177 @@
+/*
+ * Theming: dark is the default; light follows the system unless overridden.
+ * Every colour is a variable so a single [data-theme] swap covers the whole app.
+ */
+
+:root,
+:root[data-theme='dark'] {
+	color-scheme: dark;
+
+	--bg: #0e1116;
+	--panel: #161b22;
+	--panel-2: #1c2330;
+	--border: #2a3240;
+	--text: #e6edf3;
+	--muted: #8b949e;
+	--accent: #4c9aff;
+	--accent-contrast: #06121f;
+	--danger: #f85149;
+	--positive: #7ee787;
+	--warning: #f0883e;
+	--shadow: rgba(0, 0, 0, 0.4);
+
+	--wave: #6ea8fe;
+	--wave-loop: #79b8ff;
+	--playhead: #f0883e;
+	--meter-bar: linear-gradient(90deg, #2f6fb5, #4c9aff);
+	--hover-line: rgba(230, 237, 243, 0.25);
+	--loop-fill: rgba(76, 154, 255, 0.14);
+	--loop-edge: rgba(76, 154, 255, 0.75);
+	--target-mark: rgba(240, 136, 62, 0.9);
+	--meter-bg: #1c2330;
+	--meter-border: #2a3240;
+	--scale-hot: #f85149;
+}
+
+:root[data-theme='light'] {
+	color-scheme: light;
+
+	--bg: #f6f8fa;
+	--panel: #ffffff;
+	--panel-2: #eef1f5;
+	--border: #d0d7de;
+	--text: #1f2328;
+	--muted: #656d76;
+	--accent: #0969da;
+	--accent-contrast: #ffffff;
+	--danger: #cf222e;
+	--positive: #1a7f37;
+	--warning: #bc4c00;
+	--shadow: rgba(31, 35, 40, 0.12);
+
+	--wave: #218bff;
+	--wave-loop: #0969da;
+	--playhead: #bc4c00;
+	--meter-bar: linear-gradient(90deg, #6cb6ff, #0969da);
+	--hover-line: rgba(31, 35, 40, 0.25);
+	--loop-fill: rgba(9, 105, 218, 0.1);
+	--loop-edge: rgba(9, 105, 218, 0.65);
+	--target-mark: rgba(188, 76, 0, 0.9);
+	--meter-bg: #eef1f5;
+	--meter-border: #d0d7de;
+	--scale-hot: #cf222e;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family:
+		system-ui,
+		-apple-system,
+		'Segoe UI',
+		'PingFang SC',
+		'Hiragino Sans GB',
+		'Microsoft YaHei',
+		sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	transition:
+		background 0.15s ease,
+		color 0.15s ease;
+}
+
+button {
+	font: inherit;
+	color: inherit;
+	background: var(--panel-2);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 6px 12px;
+	cursor: pointer;
+	transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+button:hover:not(:disabled) {
+	background: var(--panel-2);
+	border-color: var(--accent);
+}
+
+button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-contrast);
+	font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+	background: var(--accent);
+	border-color: var(--accent);
+	opacity: 0.9;
+}
+
+button.active {
+	background: color-mix(in srgb, var(--accent) 22%, transparent);
+	border-color: var(--accent);
+	color: var(--text);
+}
+
+select {
+	font: inherit;
+	color: var(--text);
+	background: var(--panel-2);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 6px 10px;
+}
+
+input[type='range'] {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 100%;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--border);
+	outline: none;
+	cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: var(--accent);
+	border: 2px solid var(--bg);
+	cursor: pointer;
+}
+
+input[type='range']::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--accent);
+	border: 2px solid var(--bg);
+	cursor: pointer;
+}
+
+input[type='checkbox'] {
+	accent-color: var(--accent);
+}
