@@ -2,6 +2,8 @@
 
 浏览器内的音乐**变调 / 变速**工具。调性与速度是两个互相独立的轴，音频不上传、不经过服务器。
 
+**在线体验：<https://joxos.github.io/sounder/>**
+
 完整调研与设计依据见 [`docs/实现计划.md`](docs/实现计划.md)，竞品长文见 [`research/key-speed-changer-report.md`](research/key-speed-changer-report.md)。
 
 ## 当前进度
@@ -183,11 +185,32 @@ npm run dev -- --port 5183 --strictPort
 | 复位 | `0` |
 | 循环播放开关 | `L` |
 | 框选循环区间 | `Shift` + 拖动波形 |
+
 **模式**：`独立` 表示变速只改速度；`黑胶` 表示像黑胶机一样变速会带掉音高，调性滑块在此基础上继续叠加。两者的区别就是竞品全都只给了 (key, speed) 空间里的一条一维对角线。
 
 **共振峰保持默认关闭**——它存在的意义是避免花栗鼠效应，而花栗鼠正是这个工具的卖点。
 
+## 部署
+
+推送到 `main` 会自动触发 `.github/workflows/deploy.yml`：装依赖 → `svelte-check` → 构建 → 部署到 GitHub Pages。
+
+- Vite 用 `base: './'`，产物是**相对路径**，所以同一份构建既能放在域名根目录，也能放在 `https://<user>.github.io/<repo>/` 这样的子路径下，不必在构建时知道仓库名。
+- Pages **无法设置自定义响应头**，所以线上没有 COOP/COEP，`crossOriginIsolated` 为 `false`。这没问题——引擎的 WASM 不需要 `SharedArrayBuffer`（已对二进制逐字节确认无 atomics / PThread）。这也是当初不用 ffmpeg.wasm 的原因之一。
+- 本地 `npm run dev` 仍然带这些头，方便将来接入多线程编码器。
+
+两条部署相关的检查：
+
+```bash
+npm run test:pages   # 把 dist/ 放到子目录下用本地静态服务器伺服，验证子路径部署
+npm run test:live    # 直接跑线上地址，验证真实环境
+```
+
 ## 许可注意
 
+**本仓库未附带 LICENSE 文件**，因此默认保留所有权利——他人不能合法地使用、复制或分发这里的代码。若要开源复用，请自行补一份。
+
+依赖侧的义务：
+
 - `signalsmith-stretch` 声明 MIT，但 **npm 包里没有附 LICENSE 文件**（上游 [issue #29](https://github.com/Signalsmith-Audio/signalsmith-stretch/issues/29)），需从仓库取 `LICENSE.txt`。
-- 计划中的 M2 导出若使用 `@mediabunny/mp3-encoder`，其中内嵌的 LAME 是 LGPL，需要在 credits 里给 [lame](https://lame.sourceforge.io/license.txt) 链接。
+- `mediabunny` 及 `@mediabunny/mp3-encoder`、`@mediabunny/aac-encoder` 为 MPL-2.0（文件级 copyleft，未修改即无义务）。
+- **MP3 导出走的是内嵌的 LAME（LGPL）**，其许可页要求署名——正式发布时应在界面或 credits 里给 [lame](https://lame.sourceforge.io/license.txt) 一个链接。
