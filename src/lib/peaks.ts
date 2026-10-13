@@ -3,8 +3,15 @@ import type { PeakPyramidData, PeakLevelData } from './peaks.worker';
 export type { PeakPyramidData, PeakLevelData };
 
 /**
- * Build the peak pyramid in a worker. The channel arrays are transferred, not
- * copied — callers must not touch them afterwards.
+ * Build the peak pyramid in a worker.
+ *
+ * The channel ArrayBuffers are TRANSFERRED (moved, never copied): as soon as
+ * this is called every array passed in is detached — reading it yields zeros
+ * and posting it anywhere again throws
+ * "postMessage: An ArrayBuffer is detached and could not be cloned".
+ * Only pass arrays you own and will never touch again; copy first if the data
+ * must survive (selftest.ts does exactly that). Note the worker's reply comes
+ * back with only the min/max levels transferred — `rmsEnvelope` is cloned.
  */
 export function buildPeakPyramid(
 	channels: Float32Array[],

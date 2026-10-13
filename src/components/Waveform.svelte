@@ -33,10 +33,58 @@
 		theme = 'dark'
 	}: Props = $props();
 
+	/**
+	 * Theme-dependent colours, cached so the per-frame draw never touches
+	 * getComputedStyle (it used to cost ~6 forced style reads per frame).
+	 * Invalidated when the theme prop flips.
+	 */
+	const colorCache = new Map<string, string>();
+	let colorCacheTheme: string | null = null;
+
+	/**
+	 * The waveform Path2D depends only on (pyramid, css size), so it is built
+	 * once and re-filled per frame instead of re-walking ~1000 pixels on every
+	 * pointermove / playhead tick.
+	 */
+	let waveCache: {
+		pyramid: PeakPyramidData;
+		width: number;
+		height: number;
+		path: Path2D | null;
+	} | null = null;
+
 	function cssVar(name: string, fallback: string): string {
 		if (typeof getComputedStyle === 'undefined') return fallback;
+		const cached = colorCache.get(name);
+		if (cached !== undefined) return cached;
 		const value = getComputedStyle(document.documentElement).getPropertyValue(name);
-		return value.trim() || fallback;
+		const resolved = value.trim() || fallback;
+		colorCache.set(name, resolved);
+		return resolved;
+	}
+
+	function buildWavePath(pyramid: PeakPyramidData, cssWidth: number, cssHeight: number): Path2D | null {
+		const level = pickLevel(pyramid, cssWidth);
+		if (!level) return null;
+		const mid = cssHeight / 2;
+		const path = new Path2D();
+		const buckets = level.bucketCount;
+		for (let px = 0; px < cssWidth; px++) {
+			const b0 = Math.floor((px / cssWidth) * buckets);
+			const b1 = Math.min(buckets, Math.max(b0 + 1, Math.floor(((px + 1) / cssWidth) * buckets)));
+			let lo = 0;
+			let hi = 0;
+			for (let b = b0; b < b1; b++) {
+				const bLo = level.minMax[b * 2] / 127;
+				const bHi = level.minMax[b * 2 + 1] / 127;
+				if (b < b0 || bLo < lo) lo = bLo;
+				if (b < b0 || bHi > hi) hi = bHi;
+			}
+			const yTop = mid - hi * (mid - 2);
+			const yBottom = mid - lo * (mid - 2);
+			path.rect(px, yTop, 1, Math.max(1, yBottom - yTop));
+		}
+		return path;
 	}
 
 	let canvas: HTMLCanvasElement | undefined = $state();
@@ -67,6 +115,10 @@
 
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
+		if (colorCacheTheme !== theme) {
+			colorCache.clear();
+			colorCacheTheme = theme;
+		}
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, cssWidth, cssHeight);
 
@@ -88,31 +140,26 @@
 			ctx.stroke();
 		}
 
-		// Waveform
+		// Waveform — geometry cached; per-frame cost is one fill().
 		if (pyramid && pyramid.levels.length > 0 && duration > 0) {
-			const level = pickLevel(pyramid, cssWidth);
-			if (level) {
-				const path = new Path2D();
-				const buckets = level.bucketCount;
-				for (let px = 0; px < cssWidth; px++) {
-					const b0 = Math.floor((px / cssWidth) * buckets);
-					const b1 = Math.min(buckets, Math.max(b0 + 1, Math.floor(((px + 1) / cssWidth) * buckets)));
-					let lo = 0;
-					let hi = 0;
-					for (let b = b0; b < b1; b++) {
-						const bLo = level.minMax[b * 2] / 127;
-						const bHi = level.minMax[b * 2 + 1] / 127;
-						if (b < b0 || bLo < lo) lo = bLo;
-						if (b < b0 || bHi > hi) hi = bHi;
-					}
-					const yTop = mid - hi * (mid - 2);
-					const yBottom = mid - lo * (mid - 2);
-					path.rect(px, yTop, 1, Math.max(1, yBottom - yTop));
-				}
+			if (
+				!waveCache ||
+				waveCache.pyramid !== pyramid ||
+				waveCache.width !== cssWidth ||
+				waveCache.height !== cssHeight
+			) {
+				waveCache = {
+					pyramid,
+					width: cssWidth,
+					height: cssHeight,
+					path: buildWavePath(pyramid, cssWidth, cssHeight)
+				};
+			}
+			if (waveCache.path) {
 				ctx.fillStyle = loop.enabled
 					? cssVar('--wave-loop', '#79b8ff')
 					: cssVar('--wave', '#6ea8fe');
-				ctx.fill(path);
+				ctx.fill(waveCache.path);
 			}
 		} else {
 			ctx.strokeStyle = cssVar('--border', '#2a3240');
@@ -133,26 +180,20 @@
 			ctx.stroke();
 		}
 
-		// Hover cursor
-		if (hoverTime !== null && dragMode === null) {
-			const x = (hoverTime / duration) * cssWidth;
-			ctx.strokeStyle = cssVar('--hover-line', 'rgba(230, 237, 243, 0.25)');
-			ctx.lineWidth = 1;
-			ctx.beginPath();
-			ctx.moveTo(x + 0.5, 0);
-			ctx.lineTo(x + 0.5, cssHeight);
-			ctx.stroke();
-		}
+		// NOTE: the hover cursor deliberately does NOT live on this canvas.
+		// Drawing it here forced a full waveform repaint on every pointermove,
+		// which is what made the line trail the mouse. It is a DOM overlay now
+		// (see the template below), so moving the mouse never touches canvas.
 	}
 
 	$effect(() => {
 		// Re-run whenever anything the drawing depends on changes.
+		// hoverTime is deliberately absent: hover feedback is DOM-only now.
 		void pyramid;
 		void position;
 		void loop.enabled;
 		void loop.start;
 		void loop.end;
-		void hoverTime;
 		void theme;
 		draw();
 	});
@@ -225,6 +266,12 @@
 >
 	<canvas bind:this={canvas}></canvas>
 	{#if hoverTime !== null && duration > 0}
+		{#if dragMode === null}
+			<div
+				class="hover-line"
+				style:transform="translateX({(hoverTime / duration) * width}px)"
+			></div>
+		{/if}
 		<div class="tooltip" style:left="{Math.min(Math.max(0, (hoverTime / duration) * width - 24), Math.max(0, width - 48))}px">
 			{formatTime(hoverTime)}
 		</div>
@@ -257,6 +304,22 @@
 		font-variant-numeric: tabular-nums;
 		background: rgba(0, 0, 0, 0.72);
 		border-radius: 4px;
+		pointer-events: none;
+	}
+
+	/*
+	 * Hover guide line: a composited DOM element, updated by a single style
+	 * write per pointermove. CSS owns the dashed look (a 1px canvas line at
+	 * fractional devicePixelRatio used to render broken/blurry — the "虚线"
+	 * nobody asked for), and translateX keeps it off the layout path.
+	 */
+	.hover-line {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 0;
+		border-left: 1px dashed var(--hover-line, rgba(230, 237, 243, 0.25));
 		pointer-events: none;
 	}
 </style>

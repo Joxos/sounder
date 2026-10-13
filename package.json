@@ -11,6 +11,7 @@
     "smoke": "node dev/smoke.mjs",
     "test:audio": "node dev/app-audio-test.mjs",
     "test:export": "node dev/export-test.mjs",
+    "test:detach": "node dev/detach-regression.mjs",
     "test:worklet": "node dev/worklet-inputs-regression.mjs",
     "test:quality": "node dev/stretch-quality.mjs",
     "test:pages": "node dev/pages-check.mjs",

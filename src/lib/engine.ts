@@ -166,7 +166,6 @@ export class AudioEngine {
 	private rmsHopSeconds = 0.1;
 
 	private originalBuffer: AudioBuffer | null = null;
-	private channels: DecodedAudio['channels'] = [];
 	private volumeValue = 1;
 	private trackSampleRate = 0;
 	private duration = 0;
@@ -299,9 +298,11 @@ export class AudioEngine {
 		this.limiter.connect(this.outputAnalyser);
 		this.limiter.connect(ctx.destination);
 
-		// Keep the prepared PCM for offline export. It is the same data the
-		// worklet holds, so this costs no extra memory.
-		this.channels = prepared.channels;
+		// Export PCM comes from `originalBuffer` (the copy made above), NOT from
+		// `prepared.channels`: App hands those very arrays to the peak-pyramid
+		// worker, which *transfers* them (peaks.ts). Retaining them here made
+		// renderOffline() → addBuffers() fail with
+		// "postMessage on MessagePort: ArrayBuffer is detached".
 		this.originalRmsDb = rmsDb(prepared.channels);
 		this.smoothGainDb = 0;
 		this.processedPower = 0;
@@ -679,7 +680,12 @@ export class AudioEngine {
 			normalizeToPeakDb?: number | null;
 		} = {}
 	): Promise<AudioBuffer> {
-		if (this.channels.length === 0) {
+		// `originalBuffer` holds the only PCM copy the engine owns (see load()).
+		// Reading the export source from here — rather than from arrays shared
+		// with the peak-pyramid worker, which transfers/detaches them — is what
+		// keeps addBuffers() from throwing "ArrayBuffer is detached".
+		const source = this.originalBuffer;
+		if (!source || source.length === 0) {
 			throw new Error('没有可导出的音频');
 		}
 
@@ -699,7 +705,7 @@ export class AudioEngine {
 		const outSeconds = contentSeconds / speed;
 
 		const sr = this.trackSampleRate;
-		const channelCount = this.channels.length;
+		const channelCount = source.numberOfChannels;
 		const probe = new OfflineAudioContext(channelCount, 1, sr);
 		const latencyProbe = probe.sampleRate;
 
@@ -728,7 +734,14 @@ export class AudioEngine {
 		node.connect(gain);
 		gain.connect(off.destination);
 
-		await node.addBuffers(this.channels);
+		// Views into the engine-owned AudioBuffer: addBuffers() posts them by
+		// structured clone (no transfer arg), so the AudioBuffer itself stays
+		// intact for A/B and future exports.
+		const channelViews: Float32Array<ArrayBuffer>[] = [];
+		for (let c = 0; c < channelCount; c++) {
+			channelViews.push(source.getChannelData(c) as Float32Array<ArrayBuffer>);
+		}
+		await node.addBuffers(channelViews);
 		const latency = await node.latency();
 		await node.start({
 			outputTime: 0,
@@ -810,7 +823,6 @@ export class AudioEngine {
 		this.meterBuffer = null;
 		this.master = null;
 		this.originalBuffer = null;
-		this.channels = [];
 	}
 
 	dispose(): void {
